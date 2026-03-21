@@ -1,17 +1,19 @@
-# ingestion/cloner.py
 import git
 import os
 import shutil
+import stat
+
+def handle_remove_readonly(func, path, exc):
+    """
+    Windows locks .git files as read-only.
+    This forces them to be deletable.
+    """
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 def clone_repo(repo_url: str, local_path: str = "./cloned_repo") -> str:
-    """
-    Clones a GitHub repo to local_path.
-    If it already exists, deletes it first (fresh clone every time).
-    Returns the path where the repo was cloned.
-    """
-    # Why delete first? So re-running doesn't crash on "already exists"
     if os.path.exists(local_path):
-        shutil.rmtree(local_path)
+        shutil.rmtree(local_path, onexc=handle_remove_readonly)
         print(f"Deleted old clone at {local_path}")
 
     print(f"Cloning {repo_url} ...")
