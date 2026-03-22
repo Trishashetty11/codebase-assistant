@@ -12,6 +12,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [chunks, setChunks] = useState(0)
   const [repoName, setRepoName] = useState("")
+  const [recording, setRecording] = useState(false)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -61,13 +62,47 @@ export default function App() {
     setLoading(false)
   }
 
-  const handleKey = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      sendQuestion()
-    }
+ const handleKey = (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault()
+    sendQuestion()
   }
-
+}
+const startVoice = async () => {
+  setRecording(true)
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const recorder = new MediaRecorder(stream)
+    const audioChunks = []
+    recorder.ondataavailable = e => audioChunks.push(e.data)
+    recorder.onstop = async () => {
+      const blob = new Blob(audioChunks, { type: "audio/wav" })
+      const formData = new FormData()
+      formData.append("audio", blob, "query.wav")
+      setLoading(true)
+      try {
+        const res = await axios.post(`${API}/voice_query`, formData)
+        setMessages(prev => [...prev,
+          { role: "user", text: res.data.question, sources: [] },
+          { role: "assistant", text: res.data.answer, sources: res.data.sources }
+        ])
+      } catch (e) {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          text: "Voice query failed: " + e.message,
+          sources: []
+        }])
+      }
+      setLoading(false)
+      stream.getTracks().forEach(t => t.stop())
+    }
+    recorder.start()
+    setTimeout(() => recorder.stop(), 5000)
+  } catch (e) {
+    alert("Microphone access denied: " + e.message)
+  }
+  setRecording(false)
+}
   return (
     <>
       <style>{`
@@ -122,6 +157,30 @@ export default function App() {
           transform: translateY(-1px);
           box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
         }
+          .btn-voice {
+  padding: 12px;
+  width: 44px;
+  height: 44px;
+  background: #0e0a1f;
+  color: #a78bfa;
+  border: 1px solid #2d1f5e;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.btn-voice:hover:not(:disabled) {
+  background: #1a0f3a;
+  border-color: #7c3aed;
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.3);
+}
+.btn-voice:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
         .btn-primary:disabled {
           background: #1a1030;
           color: #3d2f6a;
@@ -351,23 +410,41 @@ export default function App() {
 
             {/* Input */}
             <div style={{ borderTop: "1px solid #12101f", padding: "1rem 1.25rem", display: "flex", gap: 8 }}>
-              <input
-                className="input-field"
-                type="text"
-                value={question}
-                onChange={e => setQuestion(e.target.value)}
-                onKeyDown={handleKey}
-                placeholder={indexed ? "Ask anything about this codebase..." : "Index a repo first..."}
-                disabled={!indexed || loading}
-              />
-              <button
-                className="btn-primary"
-                onClick={sendQuestion}
-                disabled={!indexed || loading || !question.trim()}
-              >
-                Send
-              </button>
-            </div>
+  <input
+    className="input-field"
+    type="text"
+    value={question}
+    onChange={e => setQuestion(e.target.value)}
+    onKeyDown={handleKey}
+    placeholder={indexed ? "Ask anything about this codebase..." : "Index a repo first..."}
+    disabled={!indexed || loading}
+  />
+  <button
+    className="btn-voice"
+    onClick={startVoice}
+    disabled={!indexed || recording}
+    title="Ask with voice (5 seconds)"
+  >
+    {recording ? (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#a855f7" stroke="#a855f7" strokeWidth="2">
+        <circle cx="12" cy="12" r="8"/>
+      </svg>
+    ) : (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <rect x="9" y="2" width="6" height="12" rx="3"/>
+        <path d="M5 10a7 7 0 0 0 14 0"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+      </svg>
+    )}
+  </button>
+  <button
+    className="btn-primary"
+    onClick={sendQuestion}
+    disabled={!indexed || loading || !question.trim()}
+  >
+    Send
+  </button>
+</div>
           </div>
         </div>
       </div>

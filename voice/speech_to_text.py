@@ -44,7 +44,10 @@ def transcribe_audio(audio_path: str) -> str:
     result = stt_model.transcribe(audio_path)
     text = result["text"].strip()
     print(f"Transcribed: {text}")
-    os.unlink(audio_path)
+    try:
+        os.unlink(audio_path)
+    except Exception:
+        pass
     return text
 
 def voice_to_text(duration: int = 5) -> str:
